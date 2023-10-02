@@ -56,7 +56,8 @@ namespace SubsurfaceStudios.Slightmapper.Assets {
         public int lightmapIndex;
 
         public RendererInfo(MeshRenderer renderer) {
-            Debug.Assert(renderer.TryGetComponent(out RendererId reference));
+            bool success = renderer.TryGetComponent(out RendererId reference);
+            Debug.Assert(success);
 
 			rendererId          = reference.Id;
             lightmapScaleOffset = renderer.lightmapScaleOffset;
@@ -77,7 +78,8 @@ namespace SubsurfaceStudios.Slightmapper.Assets {
         public Texture bakedTexture;
 
         public ReflectionProbeInfo(ReflectionProbe probe) {
-            Debug.Assert(probe.TryGetComponent(out RendererId reference));
+            bool success = probe.TryGetComponent(out RendererId reference);
+            Debug.Assert(success);
 
             rendererId = reference.Id;
             bakedTexture = probe.bakedTexture;
