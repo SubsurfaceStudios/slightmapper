@@ -2,11 +2,9 @@
 
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.UIElements;
 using SubsurfaceStudios.Slightmapper.Assets;
 using UnityEngine.SceneManagement;
 using System.IO;
-using UnityEditor.UIElements;
 using System.Linq;
 using SubsurfaceStudios.Slightmapper.Global;
 using System.Collections.Generic;
