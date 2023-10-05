@@ -535,6 +535,10 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             SlightmapperBakeState bake_state = ImportCurrentBakeState();
 
             Debug.Assert(editingBakeState);
+            
+            SlightmapperBakeState old = editingBakeState.BaketimeStates[index];
+
+            bake_state.Name = old.Name;
             editingBakeState.BaketimeStates[index] = bake_state;
         }
 
