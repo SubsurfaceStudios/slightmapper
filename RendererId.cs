@@ -31,6 +31,10 @@ namespace SubsurfaceStudios.Slightmapper.Global {
             ForceReregisterId();
         }
 
+        void OnValidate() {
+            if (RendererIdAllocator.Index[Id] != this)
+                ForceNewId();
+        }
         public void Reset() => ForceNewId();
 #endif // UNITY_EDITOR
     }
