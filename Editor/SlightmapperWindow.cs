@@ -15,13 +15,15 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
     public class SlightmapperWindow : EditorWindow {
         [MenuItem("Window/Rendering/SLightmapper Window")]
         public static void ShowSlightmapperWindow() {
-			GetWindow<SlightmapperWindow>();
+			SlightmapperWindow win = GetWindow<SlightmapperWindow>();
+			SceneManager.activeSceneChanged += win.OnSceneSwitch;
         }
 
 		private string GetSceneDataFolderPath() {
 			Scene current = SceneManager.GetActiveScene();
 			return $"{Path.GetDirectoryName(current.path)}/{current.name}";
 		}
+        
         private void EnsureSceneDataFolder() {
             Scene current = SceneManager.GetActiveScene();
             string scene_dir = Path.GetDirectoryName(current.path);
@@ -34,7 +36,14 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
 		SlightmapperData editingBakeState;
         string importedStateName;
         int bakeStateIndex;
-        SlightmapperRuntimeState editingRuntimeState;
+
+        private void OnSceneSwitch(Scene a, Scene b) {
+            editingBakeState = null;
+        }
+
+        public void OnDestroy() {
+            SceneManager.activeSceneChanged -= OnSceneSwitch;
+        }
 
 		public void OnGUI() {
             if (editingBakeState != null) {
@@ -71,8 +80,8 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 MessageType.Info
             );
             if (GUILayout.Button("Import my current scene lighting configuration.")) {
-                ImportLightConfigAsBakeState();
-                ImportRuntimeState();
+                SlightmapperRuntimeState rs = ImportRuntimeState();
+                ImportLightConfigAsBakeState(rs);
             }
 
             GUIHorizontalLine();
@@ -80,131 +89,103 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             List<SlightmapperBakeState> states = editingBakeState.BaketimeStates;
             int states_count = states.Count;
 
-            if (states_count > 0) {
-                GUILayout.Label("Currently editing baking configuration:");
+			if (states_count <= 0) {
+				EditorGUILayout.HelpBox(
+					"In order to edit a state, you need to have at least one already present.\n" +
+					"To create one, set up your scene lighting how you want it, and then press the " +
+					"\"Import\" button above.",
+					MessageType.Warning
+				);
+                return;
+			}
 
-                string[] state_names = new string[states_count];
-                int[] state_indices = new int[states_count];
+            GUILayout.Label("Currently editing baking configuration:");
 
-                for (int i = 0; i < states_count; i++) {
-                    state_names[i] = states[i].Name;
-                    state_indices[i] = i;
-                }
+            string[] state_names = new string[states_count];
+            int[] state_indices = new int[states_count];
 
-                Rect r = EditorGUILayout.GetControlRect(true);
-                bakeStateIndex = EditorGUI.IntPopup(
-                    r,
-                    bakeStateIndex,
-                    state_names,
-                    state_indices
-                );
-
-                GUILayout.Space(EditorGUIUtility.singleLineHeight);
-
-                EditorGUILayout.HelpBox(
-                    "This will overwrite the currently selected baking configuration "+
-                    "with the current setup used in your scene.",
-                    MessageType.Warning
-                );
-                if (GUILayout.Button("Overwrite light baking configuration")) {
-                    if (
-                        EditorUtility.DisplayDialog(
-                            "Confirm Overwrite",
-                            "Are you sure you want to overwrite your bake configuration "+
-                            $"\"{state_names[bakeStateIndex]}\" with the current scene "+
-                            "lighting configuration?",
-                            "Yes",
-                            "No"
-                        )
-                    ) {
-                        OverwriteBakeState(bakeStateIndex);
-                    }
-                }
-
-                EditorGUILayout.HelpBox(
-                    "This will overwrite the configuration of all lights in your scene with "+
-                    "the configuration stored in the selected baking configuration. This could "+
-                    "result in a loss of data, if you're not careful.",
-                    MessageType.Warning
-                );
-                if (GUILayout.Button("Load light baking configuration")) {
-                    if (
-                        EditorUtility.DisplayDialog(
-                            "Confirm Load",
-                            "Are you sure you want to overwrite the scene lighting "+
-                            $"configuration with the one saved as \"{state_names[bakeStateIndex]}\"? "+
-                            "This will result in the loss of any unsaved changes to your "+
-                            "scene lighting.",
-                            "Yes",
-                            "No"
-                        )
-                    ) {
-                        LoadBakeState(states[bakeStateIndex]);
-                    }
-                }
-            } else {
-                EditorGUILayout.HelpBox(
-                    "In order to edit a state, you need to have at least one already present.\n"+
-                    "To create one, set up your scene lighting how you want it, and then press the "+
-                    "\"Import\" button above.",
-                    MessageType.Warning
-                );
+            for (int i = 0; i < states_count; i++)
+            {
+                state_names[i] = states[i].Name;
+                state_indices[i] = i;
             }
 
-            GUIHorizontalLine();
+            Rect r = EditorGUILayout.GetControlRect(true);
+            bakeStateIndex = EditorGUI.IntPopup(
+                r,
+                bakeStateIndex,
+                state_names,
+                state_indices
+            );
 
-            GUILayout.Label("Currently editing runtime state: ");
+            SlightmapperBakeState bakeState = states[bakeStateIndex];
 
-            editingRuntimeState = EditorGUILayout.ObjectField(
-                editingRuntimeState,
-                typeof(SlightmapperRuntimeState),
-                false
-            ) as SlightmapperRuntimeState;
+            GUILayout.Space(EditorGUIUtility.singleLineHeight);
 
-            if (editingRuntimeState != null) {
-                GUILayout.Space(EditorGUIUtility.singleLineHeight);
+            EditorGUILayout.HelpBox(
+                "This will load the lighting configuration and lightmaps stored in this asset.\n"+
+                "BE ADVISED - This will overwrite the lighting configuration in your scene! Make "+
+                "sure to save your current lighting config before performing this action.",
+                MessageType.Warning
+            );
+            if (GUILayout.Button("Load lighting state"))
+            {
+                LoadBakeState(bakeState);
+                LoadRuntimeState(bakeState.RuntimeState);
+                Lightmapping.lightingDataAsset = bakeState.DataAsset;
+            }
 
-                EditorGUILayout.HelpBox(
-                    "This will overwrite your runtime state asset with the lighting data "+
-                    "currently in use in the scene.",
-                    MessageType.Warning
-                );
-                if (GUILayout.Button("Overwrite runtime state")) {
-                    if (
-                        EditorUtility.DisplayDialog(
-                            "Confirm Overwrite",
-                            "Are you sure you want to overwrite the specified runtime state asset? "+
-                            "This will replace all the lightmaps, light probes, and reflection probes "+
-                            "saved in the asset with those currently found in the scene, and may result "+
-                            "in a loss of lightmap data.",
-                            "Yes",
-                            "No"
-                        )
-                    ) {
-                        OverwriteRuntimeState(editingRuntimeState);
+            EditorGUILayout.HelpBox(
+                "This will overwrite the lighting configuration and lightmaps stored in this state.\n"+
+                "Be careful!",
+                MessageType.Warning
+            );
+            if (GUILayout.Button("Overwrite lighting state"))
+            {
+                OverwriteBakeState(bakeStateIndex);
+                OverwriteRuntimeState(bakeState.RuntimeState);
+            }
+
+            if (GUILayout.Button("Rebake lighting"))
+            {
+                try {
+                    EditorUtility.DisplayProgressBar("Slightmapper Bake Util", "Loading lighting configuration...", 0);
+                    LoadBakeState(bakeState);
+                    LoadRuntimeState(bakeState.RuntimeState);
+                    
+                    EditorUtility.DisplayProgressBar("Slightmapper Bake Util", "Prepping for bake...", 0.1f);
+                    Lightmapping.lightingDataAsset = null;
+
+                    EditorUtility.DisplayProgressBar("Slightmapper Bake Util", "Baking lights...", 0.5f);
+
+                    void OnBakeFinished() {
+                        Lightmapping.bakeCompleted -= OnBakeFinished;
+
+                        EditorUtility.DisplayProgressBar("Slightmapper Bake Util", "Finalizing bake...", 0.75f);
+                        OverwriteRuntimeState(bakeState.RuntimeState);
+
+                        if (bakeState.DataAsset != null)
+                            AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(bakeState.DataAsset));
+
+                        string dataAssetPath = AssetDatabase.GetAssetPath(Lightmapping.lightingDataAsset);
+                        string dataAssetName = Path.GetFileName(dataAssetPath);
+                        string dataAssetDestinationPath = Path.Join(GetSceneDataFolderPath(), bakeState.Name, dataAssetName);
+
+                        AssetDatabase.MoveAsset(dataAssetPath, dataAssetDestinationPath);
+
+                        bakeState.DataAsset = Lightmapping.lightingDataAsset;
+                        EditorUtility.ClearProgressBar();
                     }
-                }
 
-                EditorGUILayout.HelpBox(
-                    "This will replace the lightmaps and other data currently in use "+
-                    "in the scene with what is stored in the asset. This will be automatically "+
-                    "reverted by Unity when you reload the scene.",
-                    MessageType.Info
-                );
-                if (GUILayout.Button("Load runtime state")) {
-                    if (
-                        EditorUtility.DisplayDialog(
-                            "Confirm Load",
-                            "Are you sure you want to load this runtime state asset?",
-                            "Yes",
-                            "No"
-                        )
-                    ) {
-                        LoadRuntimeState(editingRuntimeState);
-                    }
+                    Lightmapping.bakeCompleted += OnBakeFinished;
+                    Lightmapping.BakeAsync();
+                } catch (Exception ex) {
+                    Debug.LogException(ex);
+                } finally {
+                    EditorUtility.ClearProgressBar();
                 }
             }
-        }
+		}
 
         private void LoadRuntimeState(SlightmapperRuntimeState state) {
             System.Diagnostics.Stopwatch benchmark_timer = new();
@@ -225,6 +206,26 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                     0   
                 );
 
+                for (int i = 0; i < state.lightmaps.Length; i++) {
+                    LightmapReference reference = state.lightmaps[i];
+
+                    if (reference.lightmapColor != null)
+                        AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(reference.lightmapColor));
+
+                    if (reference.lightmapDir != null)
+                        AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(reference.lightmapDir));
+
+                    if (reference.shadowMask != null)
+                        AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(reference.shadowMask));
+                }
+
+                for (int i = 0; i < state.reflectionProbeData.Length; i++) {
+                    ReflectionProbeInfo info = state.reflectionProbeData[i];
+
+                    if (info.bakedTexture != null)
+                        AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(info.bakedTexture));
+                }
+
                 state.lightmaps       = LightmapSettings.lightmaps.Select(x => new LightmapReference(x)).ToArray();
                 state.lightmapsMode   = LightmapSettings.lightmapsMode;
                 state.lightProbes     = LightmapSettings.lightProbes;
@@ -232,7 +233,6 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 string path = Path.GetDirectoryName(AssetDatabase.GetAssetPath(state)) + '/';
                 for (int i = 0; i < state.lightmaps.Length; i++) {
                     LightmapReference reference = state.lightmaps[i];
-
 
                     if (reference.lightmapColor) {
                         string lm_color_path = AssetDatabase.GetAssetPath(reference.lightmapColor);
@@ -332,7 +332,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             }
         }
 
-        private void ImportRuntimeState() {
+        private SlightmapperRuntimeState ImportRuntimeState() {
             try {
                 EditorUtility.DisplayProgressBar(
                     "Slightmapper Runtime State Importer",
@@ -446,6 +446,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 AssetDatabase.MoveAsset(lighting_data_path, path + lighting_data_filename);
 
                 AssetDatabase.Refresh();
+                return state_asset;
             } catch (Exception ex) {
                 EditorUtility.DisplayDialog("An error occurred!", ex.Message, "ok");
                 Debug.LogException(ex);
@@ -518,6 +519,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 SlightmapperBakeState bake_state = new() {
                     Name = importedStateName,
 
+                    DataAsset = Lightmapping.lightingDataAsset,
                     LightSettings = light_cfg,
                 };
 
@@ -538,13 +540,18 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             
             SlightmapperBakeState old = editingBakeState.BaketimeStates[index];
 
+            if (old.DataAsset != null)
+                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(old.DataAsset));
+
             bake_state.Name = old.Name;
+            bake_state.RuntimeState = old.RuntimeState;
             editingBakeState.BaketimeStates[index] = bake_state;
         }
 
-        private void ImportLightConfigAsBakeState() {
+        private void ImportLightConfigAsBakeState(SlightmapperRuntimeState rs) {
             try {
                 SlightmapperBakeState bake_state = ImportCurrentBakeState();
+                bake_state.RuntimeState = rs;
 
                 Debug.Assert(editingBakeState);
                 editingBakeState.BaketimeStates ??= new List<SlightmapperBakeState>();

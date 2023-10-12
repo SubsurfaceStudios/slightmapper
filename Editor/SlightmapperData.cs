@@ -1,6 +1,9 @@
+#if UNITY_EDITOR
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace SubsurfaceStudios.Slightmapper.Assets {
@@ -13,6 +16,8 @@ namespace SubsurfaceStudios.Slightmapper.Assets {
     [Serializable]
     public class SlightmapperBakeState {
         public string Name;
+        public SlightmapperRuntimeState RuntimeState;
+        public LightingDataAsset DataAsset;
         public ComptimeLightInfo[] LightSettings;
     }
 
@@ -28,3 +33,4 @@ namespace SubsurfaceStudios.Slightmapper.Assets {
         public float IndirectMultiplier;
     }
 }
+#endif
