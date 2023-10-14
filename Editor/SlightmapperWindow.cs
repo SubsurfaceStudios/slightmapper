@@ -73,7 +73,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             GUILayout.Label("Name of imported bake configuration and runtime state asset:");
             importedStateName = GUILayout.TextField(importedStateName);
 
-            bool emptyName = string.IsNullOrEmpty(importedStateName) || string.IsNullOrWhiteSpace(importedStateName); 
+            bool emptyName = string.IsNullOrWhiteSpace(importedStateName); 
             if(emptyName) {
                 EditorGUILayout.HelpBox(
                     "You must specify a name for the imported state.",
@@ -212,7 +212,9 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
             {
                 fontStyle = FontStyle.Bold
             };
+
             
+            EditorGUILayout.HelpBox("This will delete the bake configuration and runtime state asset. This action cannot be undone.", MessageType.Warning);
             if (GUILayout.Button("Delete Configuration", bold))
             {
                 if (EditorUtility.DisplayDialog(
@@ -231,9 +233,9 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                     
                     // Delete the configuration folder
                     string data_path = GetSceneDataFolderPath();
-                    string config_path = Path.Join(data_path, delete_state.Name);
+                    string lightmap_folder_path = Path.Join(data_path, delete_state.Name);
                     
-                    AssetDatabase.DeleteAsset(config_path);
+                    AssetDatabase.DeleteAsset(lightmap_folder_path);
                     
                     // Remove from Slightmapper Data
                     states.RemoveAt(delete_index);
