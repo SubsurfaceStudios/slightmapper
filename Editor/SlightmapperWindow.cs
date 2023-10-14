@@ -21,7 +21,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
 
 		private string GetSceneDataFolderPath() {
 			Scene current = SceneManager.GetActiveScene();
-			return $"{Path.GetDirectoryName(current.path)}/{current.name}";
+            return Path.Join(Path.GetDirectoryName(current.path), current.name);
 		}
         
         private void EnsureSceneDataFolder() {
@@ -32,7 +32,7 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 AssetDatabase.CreateFolder(scene_dir, data_dir_name);
         }
 		private void GUIHorizontalLine() => EditorGUILayout.LabelField(string.Empty, GUI.skin.horizontalSlider);
-
+        
 		SlightmapperData editingBakeState;
         string importedStateName;
         int bakeStateIndex;
@@ -72,6 +72,23 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
         private void MainGUI() {
             GUILayout.Label("Name of imported bake configuration and runtime state asset:");
             importedStateName = GUILayout.TextField(importedStateName);
+
+            bool emptyName = string.IsNullOrEmpty(importedStateName) || string.IsNullOrWhiteSpace(importedStateName); 
+            if(emptyName) {
+                EditorGUILayout.HelpBox(
+                    "You must specify a name for the imported state.",
+                    MessageType.Error
+                );
+            }
+
+            bool stateExists = editingBakeState.BaketimeStates.Any(x => x.Name == importedStateName);
+            if(stateExists) {
+                EditorGUILayout.HelpBox(
+                    "A bake configuration with this name already exists.",
+                    MessageType.Error
+                );
+            }
+            
             EditorGUILayout.HelpBox(
                 "This will import the scene's current lighting state "+
                 "(lightmaps, reflection probes, light probes, etc) as "+
@@ -79,11 +96,16 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 "(loaded before rebaking the Runtime State).",
                 MessageType.Info
             );
+            
+            EditorGUI.BeginDisabledGroup(emptyName || stateExists);
             if (GUILayout.Button("Import my current scene lighting configuration.")) {
+                importedStateName = importedStateName.Trim();
+                
                 SlightmapperRuntimeState rs = ImportRuntimeState();
                 ImportLightConfigAsBakeState(rs);
             }
-
+            EditorGUI.EndDisabledGroup();
+            
             GUIHorizontalLine();
 
             List<SlightmapperBakeState> states = editingBakeState.BaketimeStates;
@@ -185,8 +207,42 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                     EditorUtility.ClearProgressBar();
                 }
             }
-		}
+            
+            GUIStyle bold = new GUIStyle(GUI.skin.button)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            
+            if (GUILayout.Button("Delete Configuration", bold))
+            {
+                if (EditorUtility.DisplayDialog(
+                    "Are you sure?",
+                    "This will delete the bake configuration and runtime state asset. This action cannot be undone.",
+                    "Yes",
+                    "No"
+                ))
+                {
+                    int delete_index = bakeStateIndex;
+                    SlightmapperBakeState delete_state = editingBakeState.BaketimeStates[delete_index];
 
+                    editingBakeState = null;
+                    
+                    EditorUtility.DisplayProgressBar("Slightmapper Bake Util", "Deleting bake configuration...", 0);
+                    
+                    // Delete the configuration folder
+                    string data_path = GetSceneDataFolderPath();
+                    string config_path = Path.Join(data_path, delete_state.Name);
+                    
+                    AssetDatabase.DeleteAsset(config_path);
+                    
+                    // Remove from Slightmapper Data
+                    states.RemoveAt(delete_index);
+                    
+                    EditorUtility.ClearProgressBar();
+                }
+            }
+		}
+        
         private void LoadRuntimeState(SlightmapperRuntimeState state) {
             System.Diagnostics.Stopwatch benchmark_timer = new();
             benchmark_timer.Start();
@@ -404,14 +460,16 @@ namespace SubsurfaceStudios.Slightmapper.Editor {
                 state_asset.staticRendererData = renderer_info;
                 
                 Scene scene = SceneManager.GetActiveScene();
-                string scene_data_path = $"{Path.GetDirectoryName(scene.path)}/{scene.name}";
-
-                if (!AssetDatabase.IsValidFolder($"{scene_data_path}/{importedStateName}"))
+                string scene_data_path = Path.Join(Path.GetDirectoryName(scene.path), scene.name);
+                
+                string asset_dir = Path.Join(scene_data_path, importedStateName);
+                if (!AssetDatabase.IsValidFolder(asset_dir))
                     AssetDatabase.CreateFolder(scene_data_path, importedStateName);
-
-                AssetDatabase.CreateAsset(state_asset, $"{scene_data_path}/{importedStateName}/{importedStateName}.asset");
-
-                string path = Path.GetDirectoryName(AssetDatabase.GetAssetPath(state_asset)) + '/';
+                
+                string asset_path = Path.Join(scene_data_path, importedStateName, $"{importedStateName}.asset");
+                AssetDatabase.CreateAsset(state_asset, asset_path);
+                
+                string path = Path.Join(Path.GetDirectoryName(AssetDatabase.GetAssetPath(state_asset)), "/");
                 for (int i = 0; i < state_asset.lightmaps.Length; i++) {
                     LightmapReference reference = state_asset.lightmaps[i];
 
